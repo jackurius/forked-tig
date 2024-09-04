@@ -513,7 +513,7 @@ async fn update_cutoffs(block: &Block, cache: &mut AddBlockCache) {
             .as_mut()
             .unwrap();
         let phase_in_start = (block.details.round - 1) * config.rounds.blocks_per_round;
-        let phase_in_period = config.qualifiers.cutoff_phase_in_period.unwrap();
+        let phase_in_period = 600;
         let phase_in_end = phase_in_start + phase_in_period;
         let min_cutoff = config.qualifiers.min_cutoff.clone().unwrap();
         let min_num_solutions = cache
@@ -524,7 +524,7 @@ async fn update_cutoffs(block: &Block, cache: &mut AddBlockCache) {
             .unwrap();
         let mut cutoff = min_cutoff
             .max((min_num_solutions as f64 * config.qualifiers.cutoff_multiplier).ceil() as u32);
-        if phase_in_challenge_ids.len() > 0 && phase_in_end > block.details.height {
+        if phase_in_end > block.details.height {
             let phase_in_min_num_solutions = cache
                 .active_challenges
                 .keys()
@@ -532,10 +532,19 @@ async fn update_cutoffs(block: &Block, cache: &mut AddBlockCache) {
                 .map(|id| num_solutions_by_challenge.get(id).unwrap_or(&0).clone())
                 .min()
                 .unwrap();
-            let phase_in_cutoff = min_cutoff.max(
-                (phase_in_min_num_solutions as f64 * config.qualifiers.cutoff_multiplier).ceil()
-                    as u32,
-            );
+            let mut phase_in_cutoff = (phase_in_min_num_solutions as f64
+                * config.qualifiers.cutoff_multiplier)
+                .ceil() as u32;
+            if phase_in_cutoff < 10
+                && cache
+                    .active_challenges
+                    .keys()
+                    .filter(|&id| *num_solutions_by_challenge.get(id).unwrap_or(&0) > 0)
+                    .count()
+                    >= 3
+            {
+                phase_in_cutoff = 10;
+            }
             let phase_in_weight =
                 (phase_in_end - block.details.height) as f64 / phase_in_period as f64;
             cutoff = (phase_in_cutoff as f64 * phase_in_weight
